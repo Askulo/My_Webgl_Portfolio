@@ -435,3 +435,70 @@ footer {
   height: 100%;
   z-index: -2; /* Put it behind everything */
 }
+
+
+.modern-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 10%;
+  background: rgba(10, 10, 10, 0.8);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.footer-links {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.icon-link {
+  color: #888; /* Muted default color */
+  transition: all 0.3s ease;
+}
+
+.icon-link:hover {
+  color: #fff; /* Bright on hover */
+  transform: translateY(-3px);
+}
+
+.footer-icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* Status Styling */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #aaa;
+}
+
+.dot {
+  height: 8px;
+  width: 8px;
+  background-color: #00ff88; /* Neon Green */
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 8px #00ff88;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+/* Responsive for Mobile */
+@media (max-width: 600px) {
+  .modern-footer {
+    flex-direction: column;
+    gap: 1.5rem;
+    text-align: center;
+  }
+}
