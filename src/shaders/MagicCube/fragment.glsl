@@ -58,16 +58,15 @@ float smoothNoise(vec3 p) {
     f.z);
 }
 
-// ── 3-octave FBM (inner flow / veins) — 4th octave dropped for perf ────
+// ── 2-octave FBM (inner flow / veins) — optimized for perf ────
 float fbmFlow(vec3 p, float t) {
   float f = 0.0;
   f += 0.500 * smoothNoise(p * 2.1 + vec3(t*0.30, t*0.18, t*0.25));
   f += 0.250 * smoothNoise(p * 4.3 - vec3(t*0.50, t*0.35, t*0.40));
-  f += 0.125 * smoothNoise(p * 8.7 + vec3(t*0.70, t*0.55, t*0.60));
   return f;
 }
 
-// ── Double-Voronoi caustics — 2x2 loops (was 3x3) for perf ────────────
+// ── Single-Voronoi caustics — optimized for perf ────────────
 float caustics(vec2 p, float t) {
   vec2 p1 = p * 5.5 + t * 0.12;
   vec2 i1 = floor(p1), f1 = fract(p1);
@@ -77,17 +76,8 @@ float caustics(vec2 p, float t) {
     vec2 pt = n + 0.5 + 0.45*vec2(hash(i1+n), hash(i1+n+vec2(1.7,2.3)));
     md1 = min(md1, length(pt - f1));
   }
-  vec2 p2 = p * 2.75 - t * 0.07;
-  vec2 i2 = floor(p2), f2 = fract(p2);
-  float md2 = 1.0;
-  for (int x=0; x<=1; x++) for (int y=0; y<=1; y++) {
-    vec2 n  = vec2(float(x), float(y));
-    vec2 pt = n + 0.5 + 0.45*vec2(hash(i2+n+vec2(5.3,8.1)), hash(i2+n+vec2(3.7,6.3)));
-    md2 = min(md2, length(pt - f2));
-  }
   float c1 = pow(1.0 - smoothstep(0.0, 0.55, md1), 2.5);
-  float c2 = pow(1.0 - smoothstep(0.0, 0.55, md2), 2.5);
-  return c1 * 0.6 + c2 * 0.4;
+  return c1;
 }
 
 void main() {

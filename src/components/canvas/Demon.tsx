@@ -14,6 +14,7 @@ import fragmentShader from "../../shaders/MagicCube/fragment.glsl?raw";
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
+// import { BufferGeometryUtils } from 'three/examples/jsm/utils/BufferGeometryUtils';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -75,6 +76,10 @@ export function Demon(props: ThreeElements['group']) {
     () => (nodes['Box_002'] as THREE.Mesh)?.geometry,
     [nodes]
   )
+
+  //Merge all static meshes (Landscape, Pillars, Bridge)
+
+
 
   useGSAP(() => {
     const scene = sceneRef.current;

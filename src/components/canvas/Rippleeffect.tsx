@@ -8,6 +8,10 @@
  *  ✓ useStrength prop is reactive via useEffect (not just on init)
  *  ✓ Frame priority=1 so it runs before EffectComposer (priority=2 default)
  *  ✓ Cleans up resize listener on unmount
+ *  ✓ FIX: args no longer passes THREE.Texture (causes circular JSON error in
+ *          wrapEffect). Effect is constructed with a 1×1 placeholder and the
+ *          real texture is pushed imperatively via updateDisplacement() in
+ *          useFrame, same as before.
  */
 
 import { useRef, useMemo, useEffect, FC } from 'react'
@@ -40,12 +44,24 @@ const RIPPLE_FRAGMENT = /* glsl */ `
 `
 
 export class RippleEffectImpl extends Effect {
-  constructor(displacementTexture: THREE.Texture, strength: number) {
+  constructor(strength: number) {
+    // FIX: construct with a 1×1 placeholder texture — no scene-graph object,
+    // no circular reference. wrapEffect serialises `args` via JSON.stringify,
+    // so passing a real WebGLRenderTarget texture here caused the crash.
+    // The real texture is pushed every frame via updateDisplacement().
+    const placeholder = new THREE.DataTexture(
+      new Uint8Array([0, 0, 0, 0]),
+      1,
+      1,
+      THREE.RGBAFormat,
+    )
+    placeholder.needsUpdate = true
+
     super('RippleEffect', RIPPLE_FRAGMENT, {
       blendFunction: BlendFunction.NORMAL,
       uniforms: new Map<string, THREE.Uniform<any>>([
-        ['uDisplacement', new THREE.Uniform(displacementTexture)],
-        ['uStrength',     new THREE.Uniform(strength)],
+        ['uDisplacement', new THREE.Uniform(placeholder)],
+        ['uStrength', new THREE.Uniform(strength)],
       ]),
     })
   }
@@ -58,6 +74,8 @@ export class RippleEffectImpl extends Effect {
   }
 }
 
+// FIX: args now only carries primitives (strength: number), so wrapEffect's
+// internal JSON.stringify round-trip is safe.
 const RipplePass = wrapEffect(RippleEffectImpl)
 
 // ─── 2. DISPLACEMENT SHADERS (ping-pong) ─────────────────────────────────────
@@ -111,32 +129,35 @@ const DISP_FRAG = /* glsl */ `
 
 export type RippleEffectProps = {
   brushTexturePath?: string
-  strength?:         number
-  maxRipples?:       number   // kept for API compat; unused internally
-  relaxation?:       number
-  brushSize?:        number   // NEW: brush radius in UV space (default 0.12)
+  strength?: number
+  maxRipples?: number   // kept for API compat; unused internally
+  relaxation?: number
+  brushSize?: number    // brush radius in UV space (default 0.12)
 }
 
 export const RippleEffect: FC<RippleEffectProps> = ({
   brushTexturePath = '/textures/brush.png',
-  strength         = 0.04,
-  maxRipples       = 50,
-  relaxation       = 0.92,
-  brushSize        = 0.12,
+  strength = 0.04,
+  maxRipples = 50,
+  relaxation = 0.92,
+  brushSize = 0.12,
 }) => {
   const { gl, size } = useThree()
 
   // ── Brush texture (fallback: white circle if path 404s) ─────────────────
   const brush = useTexture(brushTexturePath)
 
+  // Prevents "texture is not serializable" error during SSR.
+  brush.toJSON = () => ({} as any);
+
   // ── Render target factory ────────────────────────────────────────────────
   const makeRT = (w: number, h: number) =>
-    new THREE.WebGLRenderTarget(w, h, {
-      minFilter:   THREE.LinearFilter,
-      magFilter:   THREE.LinearFilter,
+    new THREE.WebGLRenderTarget(Math.floor(w / 2), Math.floor(h / 2), {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
       depthBuffer: false,
-      format:      THREE.RGBAFormat,
-      type:        THREE.HalfFloatType,  // higher precision for smooth fades
+      format: THREE.RGBAFormat,
+      type: THREE.HalfFloatType,
     })
 
   const rtA = useMemo(() => makeRT(size.width, size.height), [])  // eslint-disable-line
@@ -153,13 +174,12 @@ export const RippleEffect: FC<RippleEffectProps> = ({
     return cam
   }, [])
 
-  // Build material ONCE; we'll update uniforms reactively via refs
   const dispMaterial = useMemo(() => {
     const mat = new THREE.ShaderMaterial({
-      vertexShader:   DISP_VERT,
+      vertexShader: DISP_VERT,
       fragmentShader: DISP_FRAG,
       uniforms: {
-        uPrev:      { value: rtA.texture },            // ← read target texture
+        uPrev:      { value: rtA.texture },
         uMouse:     { value: new THREE.Vector2(0.5, 0.5) },
         uPrevMouse: { value: new THREE.Vector2(0.5, 0.5) },
         uAspect:    { value: size.width / size.height },
@@ -184,9 +204,8 @@ export const RippleEffect: FC<RippleEffectProps> = ({
   useEffect(() => {
     const w = size.width
     const h = size.height
-
-    readTarget.current.setSize(w, h)
-    writeTarget.current.setSize(w, h)
+    readTarget.current.setSize(Math.floor(w / 2), Math.floor(h / 2))
+    writeTarget.current.setSize(Math.floor(w / 2), Math.floor(h / 2))
     dispMaterial.uniforms.uAspect.value = w / h
   }, [size.width, size.height, dispMaterial])
 
@@ -209,10 +228,10 @@ export const RippleEffect: FC<RippleEffectProps> = ({
       )
     }
     window.addEventListener('mousemove', onMove)
-    window.addEventListener('touchmove',  onTouch, { passive: true })
+    window.addEventListener('touchmove', onTouch, { passive: true })
     return () => {
       window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('touchmove',  onTouch)
+      window.removeEventListener('touchmove', onTouch)
     }
   }, [])
 
@@ -230,11 +249,9 @@ export const RippleEffect: FC<RippleEffectProps> = ({
   useFrame(({ gl: renderer }) => {
     const velocity = mouse.current.distanceTo(prevMouse.current)
 
-    // Point uPrev at the current READ target
     dispMaterial.uniforms.uPrev.value      = readTarget.current.texture
     dispMaterial.uniforms.uMouse.value.copy(mouse.current)
     dispMaterial.uniforms.uPrevMouse.value.copy(prevMouse.current)
-    // Velocity-scaled stamp: fast = strong, idle = 0
     dispMaterial.uniforms.uStrength.value  = Math.min(velocity * 10.0, 1.0)
 
     prevMouse.current.copy(mouse.current)
@@ -253,19 +270,21 @@ export const RippleEffect: FC<RippleEffectProps> = ({
     renderer.autoClear = savedAutoClear
 
     // Swap read ↔ write
-    const tmp           = readTarget.current
+    const tmp         = readTarget.current
     readTarget.current  = writeTarget.current
     writeTarget.current = tmp
 
-    // Push fresh texture to the Effect pass
+    // Push fresh texture + strength to the Effect pass imperatively
     effectRef.current?.updateDisplacement(readTarget.current.texture)
     effectRef.current?.updateStrength(strength)
-  }, 1) // priority 1 → runs before EffectComposer (default priority is higher)
+  }, 1)
 
   return (
+    // FIX: args is now [strength] — a plain number, safe to JSON.stringify.
+    // The texture is never passed through args; it is set imperatively above.
     <RipplePass
       ref={effectRef}
-      args={[readTarget.current.texture, strength]}
+      args={[strength]}
     />
   )
 }

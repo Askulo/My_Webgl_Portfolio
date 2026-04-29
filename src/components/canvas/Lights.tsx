@@ -7,7 +7,7 @@ export default function Lights() {
       {/* <directionalLight position={[0, 0, -3]} intensity={1} /> */}
       <pointLight
         position={[0, 0, -3]}      // X, Y, Z coordinates
-        color="#6989b7ff"           // Matching that electric cyan from your reference
+        color="#6989b7"           // Matching that electric cyan from your reference
         intensity={2}           // Adjust based on your scene scale
         distance={10}             // How far the light reaches before hitting 0
         decay={2}                 // 2 is physically accurate; 1 is more "linear"
@@ -15,7 +15,7 @@ export default function Lights() {
       />
       <pointLight
         position={[0, 0, 4]}      // X, Y, Z coordinates
-        color={"#6989b7ff"}           // Matching that electric cyan from your reference
+        color={"#6989b7"}           // Matching that electric cyan from your reference
         intensity={3}           // Adjust based on your scene scale
         distance={10}             // How far the light reaches before hitting 0
         decay={0}                 // 2 is physically accurate; 1 is more "linear"
